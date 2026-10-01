@@ -4,16 +4,34 @@ const META={
  jellyfish:['a',0],starfish:['a',1],turtle:['a',2],dolphin:['a',3],seahorse:['a',4],
  crab:['b',0],whale:['b',1],octopus:['b',2],clownfish:['b',3],anglerfish:['b',4]
 };
-const URLS={a:'assets/growth/growth-atlas-a.webp?v=10',b:'assets/growth/growth-atlas-b.webp?v=10'};
-const imgs={},cache=new Map();
-function load(k){if(imgs[k])return imgs[k];imgs[k]=new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=URLS[k];});return imgs[k];}
-async function frame(id,stage){stage=Math.max(0,Math.min(4,Number(stage)||0));const key=id+':'+stage;if(cache.has(key))return cache.get(key);const m=META[id];if(!m)return '';const im=await load(m[0]);const c=document.createElement('canvas');c.width=c.height=600;const x=c.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.clearRect(0,0,600,600);x.drawImage(im,stage*300,m[1]*300,300,300,0,0,600,600);const u=c.toDataURL('image/webp',.96);cache.set(key,u);return u;}
+const URLS={a:'assets/growth/growth-atlas-a.webp?v=11',b:'assets/growth/growth-atlas-b.webp?v=11'};
+const CLEAR='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+const imgs={};
+function preload(k){if(imgs[k])return;const im=new Image();im.decoding='async';im.src=URLS[k];imgs[k]=im;}
 function D(){return window.OceanData}function S(){return window.OceanStore?.get?.()}
 function creature(id){return D()?.CREATURES?.find(c=>c.id===id)}
 function stageFor(id){const s=S();return D()?.levelInfo?.(Number(s?.xp?.[id]||0))?.visualStage||0}
-async function setImg(el,id,stage){if(!el||!META[id])return;const sig=id+':'+stage;if(el.dataset.growthV10===sig)return;try{el.src=await frame(id,stage);el.dataset.growthV10=sig;el.style.objectFit='contain';el.style.objectPosition='center';el.style.transform='scale(.94)';el.style.background='transparent';}catch(e){console.warn('growth image',id,e)}}
+function setImg(el,id,stage){
+ if(!el||!META[id])return;
+ stage=Math.max(0,Math.min(4,Number(stage)||0));
+ const m=META[id],sig=id+':'+stage;
+ if(el.dataset.growthV11===sig)return;
+ preload(m[0]);
+ // Use the original atlas directly. This avoids the old 300→600 canvas upscale,
+ // WebP re-encode, then CSS downscale chain that softened artwork on Retina screens.
+ el.src=CLEAR;
+ el.style.backgroundImage='url("'+URLS[m[0]]+'")';
+ el.style.backgroundSize='500% 500%';
+ el.style.backgroundPosition=(stage*25)+'% '+(m[1]*25)+'%';
+ el.style.backgroundRepeat='no-repeat';
+ el.style.backgroundColor='transparent';
+ el.style.objectFit='contain';
+ el.style.objectPosition='center';
+ el.style.imageRendering='auto';
+ el.dataset.growthV11=sig;
+}
 function idFromAlt(alt=''){const list=D()?.CREATURES||[];return list.find(c=>alt.includes(c.name)||alt.includes(c.short))?.id}
-async function apply(){const d=D(),s=S();if(!d||!s)return;
+function apply(){const d=D(),s=S();if(!d||!s)return;
  const active=s.active||'jellyfish';
  document.querySelectorAll('.creature-visual img').forEach(el=>{const id=idFromAlt(el.alt)||active;setImg(el,id,stageFor(id))});
  document.querySelectorAll('.growth-road .growth-step img').forEach((el,i)=>setImg(el,active,i));
@@ -24,6 +42,6 @@ async function apply(){const d=D(),s=S();if(!d||!s)return;
  document.querySelectorAll('.xp-recovery-row img').forEach((el,i)=>{const c=d.CREATURES[i];if(c)setImg(el,c.id,stageFor(c.id))});
 }
 let queued=false;function schedule(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;apply()})}
-const start=()=>{load('a');load('b');schedule();new MutationObserver(schedule).observe(document.getElementById('app')||document.body,{childList:true,subtree:true});window.addEventListener('ocean:state',schedule)};
+const start=()=>{preload('a');preload('b');schedule();new MutationObserver(schedule).observe(document.getElementById('app')||document.body,{childList:true,subtree:true});window.addEventListener('ocean:state',schedule)};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
